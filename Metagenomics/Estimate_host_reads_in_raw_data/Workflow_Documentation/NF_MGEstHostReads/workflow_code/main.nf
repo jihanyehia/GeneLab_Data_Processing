@@ -21,20 +21,18 @@ include { UPDATE_ASSAY_TABLE } from './modules/update_assay_table.nf'
 include { SOFTWARE_VERSIONS  } from './modules/software_versions.nf'
 include { GENERATE_PROTOCOL  } from './modules/generate_protocol.nf'
 
-
-dp_tools_plugin_ch = params.dp_tools_plugin ?
-    channel.value(file(params.dp_tools_plugin)) : 
-    channel.value(file("$projectDir/bin/dp_tools__metagenomics_estHost"))
-
-runsheet_ch = params.runsheet_path ? channel.fromPath(params.runsheet_path) : null
-isa_archive_ch = params.isa_archive_path ? channel.fromPath(params.isa_archive_path) : null
-
-
 workflow {
     main:
     
     // Check input parameters
     validateParameters()
+
+    dp_tools_plugin_ch = params.dp_tools_plugin ?
+    channel.value(file(params.dp_tools_plugin)) : 
+    channel.value(file("$projectDir/bin/dp_tools__metagenomics_estHost"))
+
+    runsheet_ch = params.runsheet_path ? channel.fromPath(params.runsheet_path) : null
+    isa_archive_ch = params.isa_archive_path ? channel.fromPath(params.isa_archive_path) : null
 
     // Capture software versions
     software_versions_ch = channel.empty()
@@ -69,8 +67,8 @@ workflow {
         channel
             .fromPath(params.sample_id_list, checkIfExists: true)
             .splitText()
-            .map { it.trim() }
-            .filter { it } //Ignore blank lines
+            .map { txt -> txt.trim() }
+            .filter { txt -> txt } //Ignore blank lines
             .map { sample_id ->
                 def meta = [id: sample_id, paired_end: !params.is_single]
                 
@@ -122,7 +120,7 @@ workflow {
     // Create sample IDs channel for generating summary depending on mode
     if (params.osd) {
         sample_ids_ch = PARSE_RUNSHEET.out.samples
-                            .map { meta, reads -> meta.id }
+                            .map { meta, _reads -> meta.id }
                             .collectFile(name: "sample_ids.txt", newLine: true)
     } else {
         sample_ids_ch = channel.fromPath(params.sample_id_list)
@@ -141,11 +139,11 @@ workflow {
     nextflow_version_ch = channel.value(nf_version)
 
     //  Write software versions to file
-    software_versions_ch | filter { it }
-                         | map { it -> it.text.strip() }
+    software_versions_ch | filter { version -> version }
+                         | map { version -> version.text.strip() }
                          | unique
                          | mix(nextflow_version_ch)
-                         | collectFile({it -> it}, newLine: true, cache: false)
+                         | collectFile({versions -> versions}, newLine: true, cache: false)
                          | SOFTWARE_VERSIONS
     
     protocol_out = GENERATE_PROTOCOL(

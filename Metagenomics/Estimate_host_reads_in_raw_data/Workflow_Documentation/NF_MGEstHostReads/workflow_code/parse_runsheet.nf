@@ -1,11 +1,3 @@
-def colorCodes = [
-    c_line: "┅" * 70,
-    c_back_bright_red: "\u001b[41;1m",
-    c_bright_green: "\u001b[32;1m",
-    c_blue: "\033[0;34m",
-    c_yellow: "\u001b[33;1m",
-    c_reset: "\033[0m"
-]
 // Adapted from Function: https://github.com/nf-core/rnaseq/blob/master/modules/local/process/samplesheet_check.nf
 // Function to get list of [ meta, [ fastq_1_path, fastq_2_path ] ]
 def get_runsheet_paths(LinkedHashMap row) {
@@ -15,7 +7,7 @@ def get_runsheet_paths(LinkedHashMap row) {
     meta.paired_end = row.paired_end.toBoolean()
 
     // Extract factors
-    meta.factors = row.findAll { key, value -> 
+    meta.factors = row.findAll { key, _value -> 
         key.startsWith("Factor Value[") && key.endsWith("]")
     }.collectEntries { key, value ->
         [(key[13..-2]): value] // Remove "Factor Value[" and "]"
@@ -36,13 +28,22 @@ workflow PARSE_RUNSHEET {
         ch_runsheet
     
     main:
+        def colorCodes = [
+            c_line: "┅" * 70,
+            c_back_bright_red: "\u001b[41;1m",
+            c_bright_green: "\u001b[32;1m",
+            c_blue: "\033[0;34m",
+            c_yellow: "\u001b[33;1m",
+            c_reset: "\033[0m"
+        ]
+
         ch_samples = ch_runsheet 
             | splitCsv(header: true)
             | map { row -> get_runsheet_paths(row) }
 
         // Validate consistency across samples
         ch_samples
-            .map { meta, reads -> [meta.paired_end, meta.organism_sci] }
+            .map { meta, _reads -> [meta.paired_end, meta.organism_sci] }
             .unique()
             .count()
             .subscribe { count ->
@@ -55,14 +56,14 @@ workflow PARSE_RUNSHEET {
             }
 
         // Print autodetected processing metadata for the first sample
-        ch_samples.take(1) | view { meta, reads -> 
+        ch_samples.take(1) | view { meta, _reads -> 
             """${colorCodes.c_bright_green}Autodetected Processing Metadata:
             Paired End: ${meta.paired_end}
             Organism: ${meta.organism_sci}${colorCodes.c_reset}"""
         }
         // Check that all read files are unique
         ch_samples
-            .flatMap { meta, reads -> reads }
+            .flatMap { _meta, reads -> reads }
             .collect()
             .map { all_reads ->
                 def total_count = all_reads.size()
